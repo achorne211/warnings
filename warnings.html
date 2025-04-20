@@ -16,64 +16,32 @@
     <script src="https://cdn.jsdelivr.net/npm/leaflet.opacitycontrols@1.0.0/dist/L.Control.Opacity.js"></script>
 
     <style>
-        /* --- Dark Theme - Left Sidebar Style --- */
-        html, body { height: 100%; margin: 0; padding: 0; font-family: 'Inter', sans-serif; overflow: hidden; background-color: #1f2937; /* gray-800 */ }
+        /* Styles remain the same */
+        html, body { height: 100%; margin: 0; padding: 0; font-family: 'Inter', sans-serif; overflow: hidden; background-color: #1f2937; }
         #map-container { position: relative; height: 100%; flex-grow: 1; }
-        #map { height: 100%; width: 100%; background-color: #374151; /* gray-700 */ }
-
-        /* Sidebar on the Left */
-        #sidebar {
-            height: 100%; overflow-y: hidden; /* Let inner div scroll */ width: 28%; /* Default width */
-            transition: width 0.3s ease-in-out, padding 0.3s ease-in-out;
-            flex-shrink: 0; background-color: rgba(31, 41, 55, 0.9); /* gray-800 with opacity */
-            box-shadow: 2px 0 5px rgba(0,0,0,0.2); /* Shadow on the right */
-            z-index: 1000; border-right: 1px solid #4b5563; /* gray-600 */
-            color: #d1d5db; /* gray-300 default text */
-            display: flex; flex-direction: column; /* Ensure header/content structure */
-        }
+        #map { height: 100%; width: 100%; background-color: #374151; }
+        #sidebar { height: 100%; overflow-y: hidden; width: 28%; transition: width 0.3s ease-in-out, padding 0.3s ease-in-out; flex-shrink: 0; background-color: rgba(31, 41, 55, 0.9); box-shadow: 2px 0 5px rgba(0,0,0,0.2); z-index: 1000; border-right: 1px solid #4b5563; color: #d1d5db; display: flex; flex-direction: column; }
         #sidebar.collapsed { width: 0; padding: 0 !important; overflow: hidden; box-shadow: none; border-right: none; }
-
-        /* Sidebar Header */
-        #sidebar-header {
-             display: flex; justify-content: space-between; align-items: center;
-             padding: 0.75rem 1rem; /* Tailwind p-3/p-4 equivalent */
-             border-bottom: 1px solid #4b5563; /* gray-600 */
-             flex-shrink: 0; /* Prevent header from shrinking */
-        }
-         #sidebar-header h2 { margin: 0; font-size: 1.1rem; color: #f9fafb; } /* Adjusted size/color */
-         #sidebar-toggle { /* Toggle button inside header */
-             background: none; border: none; padding: 0; color: #9ca3af; /* gray-400 */ cursor: pointer;
-         }
-         #sidebar-toggle:hover { color: white; }
-
-
-        /* Loading Indicator - Dark */
+        #sidebar-header { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem 1rem; border-bottom: 1px solid #4b5563; flex-shrink: 0; }
+        #sidebar-header h2 { margin: 0; font-size: 1.1rem; color: #f9fafb; }
+        #sidebar-toggle { background: none; border: none; padding: 0; color: #9ca3af; cursor: pointer; }
+        #sidebar-toggle:hover { color: white; }
         #loading-indicator { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 1002; display: none; background-color: rgba(55, 65, 81, 0.95); color: #e5e7eb; padding: 16px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3); flex-direction: column; align-items: center; }
         #loading-indicator svg { margin-bottom: 8px; }
-
-        /* Popups - Dark */
         .leaflet-popup-content-wrapper { background: #374151; color: #d1d5db; border-radius: 6px; border: 1px solid #4b5563; }
         .leaflet-popup-tip { background: #374151; }
         .leaflet-popup-content a { color: #60a5fa; }
         .leaflet-popup-close-button { color: #d1d5db !important; }
         .popup-details-btn { display: block; margin-top: 8px; padding: 4px 8px; font-size: 0.8rem; background-color: #4b5563; color: #e5e7eb; border: none; border-radius: 4px; cursor: pointer; transition: background-color 0.2s ease; text-align: center; }
         .popup-details-btn:hover { background-color: #6b7280; color: white; }
-
-        /* Sidebar Scrollbar - Dark */
-        #sidebar-content::-webkit-scrollbar { width: 8px; } /* Apply to scrolling container */
+        #sidebar-content::-webkit-scrollbar { width: 8px; }
         #sidebar-content::-webkit-scrollbar-track { background: #374151; border-radius: 10px; }
         #sidebar-content::-webkit-scrollbar-thumb { background: #6b7280; border-radius: 10px; }
         #sidebar-content::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
-
-        /* Sidebar Content Area */
-        #sidebar-content { flex-grow: 1; overflow-y: auto; } /* Allow content to scroll */
-
-        /* Sidebar Items - Dark */
+        #sidebar-content { flex-grow: 1; overflow-y: auto; }
         .warning-item { cursor: pointer; transition: background-color 0.2s ease-in-out; border-radius: 4px; padding: 4px 6px; }
         .warning-item:hover { background-color: #4b5563; color: #f9fafb; }
         .warning-item.text-gray-400 { color: #6b7280 !important; }
-
-        /* Category Title - Colored Background */
         .category-title { cursor: pointer; display: flex; justify-content: space-between; align-items: center; padding: 8px 6px; margin-bottom: 2px; border-radius: 4px; color: white; font-weight: 600; transition: filter 0.2s ease; }
         .category-title:hover { filter: brightness(1.15); }
         .category-title .text-gray-400 { color: rgba(255,255,255,0.7) !important; }
@@ -85,59 +53,41 @@
         .category-visibility-toggle .icon-visible path { fill: #a7f3d0; }
         .category-visibility-toggle .icon-hidden path { fill: #9ca3af; }
         .color-key { display: inline-block; width: 12px; height: 12px; margin-right: 6px; border: 1px solid #ccc; vertical-align: middle; border-radius: 2px; }
-
-        /* Filter Controls - Dark */
         #filter-controls { padding: 8px 10px; background-color: #374151; border-bottom: 1px solid #4b5563; flex-shrink: 0; }
         #filter-controls h3 { color: #9ca3af; }
         #filter-controls label { color: #d1d5db; }
-
-        /* Warning List Container */
         #warning-list { padding: 1rem; padding-top: 0.5rem; }
-
-        /* Leaflet Controls - Dark */
         .leaflet-control-container .leaflet-top.leaflet-right { z-index: 1001; }
         .leaflet-control-layers { z-index: 1001; background: rgba(55, 65, 81, 0.9); box-shadow: 0 1px 4px rgba(0,0,0,0.3); border-radius: 6px; }
         .leaflet-control-layers-base label, .leaflet-control-layers-overlays label { color: #d1d5db; }
         .leaflet-control-layers-separator { border-top: 1px solid #4b5563; }
         .leaflet-control-opacity { background: rgba(55, 65, 81, 0.9); box-shadow: 0 1px 4px rgba(0,0,0,0.3); border-radius: 6px; }
         .leaflet-control-scale-line { background: rgba(55, 65, 81, 0.7); border-color: #9ca3af; color: #d1d5db; }
-
-        /* New Warning Popup - Dark */
         #new-warning-popup { position: fixed; bottom: 40px; right: 20px; background-color: rgba(0, 0, 0, 0.85); color: white; padding: 12px 18px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4); z-index: 1100; max-width: 350px; display: none; opacity: 0; transition: opacity 0.5s ease-in-out; }
         #new-warning-popup.visible { display: block; opacity: 1; }
         #new-warning-popup button { background-color: #3b82f6; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; margin-left: 10px; font-size: 0.8rem; transition: background-color 0.2s ease; }
         #new-warning-popup button:hover { background-color: #2563eb; }
         #new-warning-popup .close-btn { background-color: transparent; color: #ccc; padding: 0 5px; margin-left: 15px; }
         #new-warning-popup .close-btn:hover { color: white; }
-
-        /* Bottom Left Info Panel */
         #bottom-left-info { position: absolute; bottom: 10px; left: 10px; background-color: rgba(31, 41, 55, 0.85); color: #e5e7eb; padding: 8px 12px; border-radius: 6px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5); z-index: 1000; max-width: 350px; font-size: 0.8rem; line-height: 1.3; }
         #recent-warning-bl { cursor: pointer; text-decoration: underline; }
         #recent-warning-bl:hover { color: white; }
-
-        /* Right Count Bar */
         #count-bar { position: absolute; bottom: 10px; right: 10px; width: auto; background-color: rgba(31, 41, 55, 0.85); color: #e5e7eb; border-radius: 6px; padding: 5px 8px; box-shadow: -2px -2px 5px rgba(0,0,0,0.3); z-index: 1000; display: flex; flex-direction: row; align-items: center; font-size: 0.7rem; text-align: center; }
         .count-item { margin-left: 8px; padding: 2px 4px; width: auto; border-radius: 4px; border: 1px solid transparent; display: flex; align-items: center; gap: 4px; }
         .count-item:first-child { margin-left: 0; }
         .count-item strong { display: inline; font-size: 0.9rem; font-weight: bold; }
         .count-item span { display: inline; font-size: 0.65rem; text-transform: uppercase; }
-
-        /* Modal Dialog for Full Details */
         #modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.6); z-index: 1190; display: none; }
         #modal-dialog { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: #1f2937; color: #e5e7eb; padding: 25px; border-radius: 8px; box-shadow: 0 5px 15px rgba(0,0,0,0.5); width: 90%; max-width: 600px; z-index: 1200; display: none; max-height: 80vh; overflow-y: auto; }
         #modal-dialog h2 { margin-top: 0; color: white; border-bottom: 1px solid #4b5563; padding-bottom: 10px; margin-bottom: 15px; font-size: 1.2rem;}
         #modal-content { white-space: pre-wrap; font-size: 0.9rem; line-height: 1.5; }
         #modal-close-btn { position: absolute; top: 10px; right: 15px; background: none; border: none; color: #9ca3af; font-size: 1.8rem; font-weight: bold; cursor: pointer; line-height: 1; }
         #modal-close-btn:hover { color: white; }
-
-        /* Custom Panes for Stacking */
         .leaflet-pane .leaflet-advisory-pane { z-index: 410; }
         .leaflet-pane .leaflet-watch-pane { z-index: 420; }
         .leaflet-pane .leaflet-warning-pane { z-index: 430; }
         .leaflet-pane .leaflet-high-warning-pane { z-index: 440; }
         .leaflet-pane .leaflet-velocity-pane { z-index: 510; }
-
-        /* Top Scrolling Ticker */
         #top-ticker-bar { position: absolute; top: 0; left: 0; width: 100%; height: 30px; background-color: #dc2626; color: white; overflow: hidden; z-index: 1001; display: none; box-shadow: 0 2px 5px rgba(0,0,0,0.3); }
         #top-ticker-bar.visible { display: block; }
         #top-ticker-content-wrapper { width: 100%; height: 100%; position: relative; }
@@ -186,9 +136,9 @@
         const DARK_TILE_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>';
         const VELOCITY_IMG_URL_TEMPLATE = 'https://mesonet.agron.iastate.edu/data/gis/images/4326/ridge/{siteid}/N0S_0.png';
         const NEW_POPUP_TIMEOUT_MS = 15000;
-        const TICKER_CHARS_PER_SECOND = 15; // Adjust speed: lower = faster scroll
+        const TICKER_CHARS_PER_SECOND = 15;
         const CRITICAL_WARNING_PRIORITY_THRESHOLD = 11;
-        const VELOCITY_BOUND_OFFSET_DEG = 1.5; // Approx. bounds offset
+        const VELOCITY_BOUND_OFFSET_DEG = 1.5; // Adjusted offset
 
         // --- Global State ---
         let map; let baseLayers = {}; let overlayLayers = {}; let layerControl; let radarLayer;
@@ -591,6 +541,7 @@
                      style: style,
                      pane: targetPane,
                      onEachFeature: (feat, layer) => {
+                         // Store centroid for potential velocity lookup
                          if (layer.getBounds) { try { layer.warningCentroid = layer.getBounds().getCenter(); } catch (e) { console.warn("Could not get bounds/center for layer", props.id); } }
                          layer.isTornadoWarning = props.event?.toLowerCase().includes('tornado warning');
 
@@ -601,9 +552,10 @@
                          layer.on('click', (e) => {
                              L.DomEvent.stopPropagation(e);
                              console.log(`Polygon clicked: ${props.id}, Is Tornado: ${layer.isTornadoWarning}`);
-                             if (layer.isTornadoWarning && layer.warningCentroid) { prepareVelocityLayer(layer.warningCentroid); }
-                             else if (layer.isTornadoWarning) { console.warn("Tornado warning clicked, but centroid missing."); }
-                             layer.openPopup(); // Open popup on click
+                             if (layer.isTornadoWarning) { // Check if it's a tornado warning
+                                 prepareVelocityLayer(props); // Pass full props to get sender
+                             }
+                             layer.openPopup();
                          });
                      }
                  });
@@ -655,7 +607,7 @@
                      const styleInfo = getWarningStyle(category);
                      console.log(`updateSidebar: Applying color ${styleInfo.fillColor} to category ${category}`); // Debug Log
                      categoryTitle.className = `category-title font-semibold`;
-                     categoryTitle.style.backgroundColor = styleInfo.fillColor;
+                     categoryTitle.style.backgroundColor = styleInfo.fillColor; // Apply color
                      categoryTitle.style.color = isLightColor(styleInfo.fillColor) ? '#1f2937' : 'white';
                      if (!isCategoryVisibleState) { categoryTitle.style.filter = 'grayscale(70%) opacity(60%)'; }
                      categoryTitle.setAttribute('aria-expanded', isExpanded);
@@ -702,7 +654,7 @@
 
         /** Updates the recent warning display in the bottom left */
         function updateBottomLeftPanel() {
-             console.log("updateBottomLeftPanel: Updating... Latest info ID:", latestNewWarningInfo?.id);
+             console.log("updateBottomLeftPanel: Updating... Latest info ID:", latestNewWarningInfo?.id); // Log entry
              if (!recentWarningDisplayBl) { console.error("recentWarningDisplayBl not found"); return; }
              try {
                  if (latestNewWarningInfo && latestNewWarningInfo.id) {
@@ -750,47 +702,28 @@
                     let tickerText = "";
                     criticalWarnings.forEach(f => { const props = f.properties; const eventName = props.event || 'ALERT'; const headline = props.headline || props.areaDesc || ''; tickerText += ` *** ${eventName.toUpperCase()} *** ${headline} `; });
                     const firstItemText = ` *** ${criticalWarnings[0].properties.event.toUpperCase()} *** ${criticalWarnings[0].properties.headline || criticalWarnings[0].properties.areaDesc || ''} `;
-                    tickerText += " \u00A0\u00A0 | \u00A0\u00A0 " + firstItemText;
+                    tickerText += " \u00A0\u00A0 | \u00A0\u00A0 " + firstItemText; // Padding for loop
 
                     // --- Ticker Animation Fix ---
-                    // Check if text content needs updating
                     if (topTickerContent.textContent !== tickerText) {
                         console.log("Updating ticker text content.");
                         topTickerContent.textContent = tickerText;
-
-                        // Remove previous animation to reset properly
-                        topTickerContent.style.animation = 'none';
-
-                        // Calculate duration based on new text length
-                        // We need the rendered width for accurate speed, but text length is an approximation
-                        const approxChars = tickerText.length;
-                        const duration = Math.max(20, approxChars / TICKER_CHARS_PER_SECOND); // Ensure minimum duration
-                        console.log(`Setting ticker animation duration to approx ${duration}s`);
-
-                        // Re-apply animation via style property
-                        // Need a slight delay for the browser to register the animation removal
-                        requestAnimationFrame(() => {
-                             requestAnimationFrame(() => { // Double requestAnimationFrame ensures reflow
-                                topTickerContent.style.animation = `scroll-left ${duration}s linear infinite`;
-                             });
+                        topTickerContent.style.animation = 'none'; // Remove animation first
+                        requestAnimationFrame(() => { // Wait for next frame
+                            requestAnimationFrame(() => { // Wait another frame (ensures style removal is registered)
+                                const approxChars = tickerText.length;
+                                const duration = Math.max(20, approxChars / TICKER_CHARS_PER_SECOND); // Calculate duration
+                                console.log(`Setting ticker animation duration to approx ${duration}s`);
+                                topTickerContent.style.animation = `scroll-left ${duration}s linear infinite`; // Re-apply
+                            });
                         });
                     }
 
-                    if (!topTickerBar.classList.contains('visible')) {
-                        topTickerBar.classList.add('visible');
-                        console.log("Top ticker made visible.");
-                    }
+                    if (!topTickerBar.classList.contains('visible')) { topTickerBar.classList.add('visible'); console.log("Top ticker made visible."); }
                 } else {
-                    if (topTickerBar.classList.contains('visible')) {
-                         topTickerBar.classList.remove('visible');
-                         topTickerContent.textContent = "";
-                         topTickerContent.style.animation = 'none'; // Stop animation
-                         console.log("Top ticker hidden.");
-                    }
+                    if (topTickerBar.classList.contains('visible')) { topTickerBar.classList.remove('visible'); topTickerContent.textContent = ""; topTickerContent.style.animation = 'none'; console.log("Top ticker hidden."); }
                 }
-            } catch (error) {
-                 console.error("Error updating top ticker:", error);
-            }
+            } catch (error) { console.error("Error updating top ticker:", error); }
         }
 
 
@@ -800,9 +733,11 @@
         /** Finds the closest radar site from the predefined list */
         function findClosestRadarSite(latlng) { let closestSiteId = null; let minDistance = Infinity; if (!latlng || typeof latlng.distanceTo !== 'function') { console.error("Invalid LatLng provided to findClosestRadarSite"); return null; } for (const siteId in radarSites) { const site = radarSites[siteId]; const siteLatLng = L.latLng(site.lat, site.lon); const distance = latlng.distanceTo(siteLatLng); if (distance < minDistance) { minDistance = distance; closestSiteId = siteId; } } console.log(`Closest radar site to ${latlng}: ${closestSiteId} (Distance: ${minDistance}m)`); return closestSiteId; }
 
-        /** Prepares the static velocity image overlay for the nearest site */
-        function prepareVelocityLayer(centroid) {
-            console.log("Preparing velocity layer for centroid:", centroid);
+        /** Prepares the static velocity image overlay using ISSUING OFFICE */
+        function prepareVelocityLayer(props) { // Changed to accept full props
+            console.log("Preparing velocity layer for warning props:", props);
+            if (!props || !props.sender) { console.warn("Cannot prepare velocity layer: Missing properties or sender info."); return; }
+
             if (!velocityLayerGroup) {
                 console.log("Creating velocity layer group and adding to control.");
                 velocityLayerGroup = L.layerGroup();
@@ -810,18 +745,22 @@
                 else { console.error("Layer control not available to add velocity toggle."); }
             }
 
-            const siteId4Letter = findClosestRadarSite(centroid);
-            if (!siteId4Letter) { console.warn("Could not find closest radar site."); return; }
+            const siteId4Letter = props.sender; // Use sender ID (e.g., KOUN, KSGF)
+            console.log("Using issuing office ID:", siteId4Letter);
+
+            // Find site info in our list
+            const siteInfo = radarSites[siteId4Letter];
+            if (!siteInfo) { console.warn(`Coordinates not found for site ${siteId4Letter} in radarSites list.`); alert(`Radar site data for ${siteId4Letter} not available.`); return; }
+
+            // Derive 3-letter ID for IEM URL
             const siteId3Letter = siteId4Letter.length === 4 ? siteId4Letter.substring(1) : siteId4Letter;
-             if (siteId3Letter.length !== 3) { console.warn(`Could not derive 3-letter site ID from ${siteId4Letter}`); return; }
+             if (siteId3Letter.length !== 3) { console.warn(`Could not derive 3-letter site ID from ${siteId4Letter}`); alert(`Could not determine radar image URL for site ${siteId4Letter}.`); return; }
 
             const imageUrl = VELOCITY_IMG_URL_TEMPLATE.replace('{siteid}', siteId3Letter.toUpperCase());
             console.log("Constructed velocity image URL:", imageUrl);
 
-            const siteInfo = radarSites[siteId4Letter];
-            if (!siteInfo) { console.warn(`Coordinates not found for site ${siteId4Letter}`); return; }
             const siteLat = siteInfo.lat; const siteLon = siteInfo.lon;
-            // *** Use configured offset for velocity bounds ***
+            // *** Use slightly reduced offset for velocity bounds ***
             const latOffset = VELOCITY_BOUND_OFFSET_DEG; const lonOffset = VELOCITY_BOUND_OFFSET_DEG;
             const bounds = L.latLngBounds( [siteLat - latOffset, siteLon - lonOffset], [siteLat + latOffset, siteLon + lonOffset] );
             console.log(`Approximate bounds for ${siteId4Letter} (Offset: ${VELOCITY_BOUND_OFFSET_DEG}):`, bounds);
@@ -829,11 +768,11 @@
             velocityLayerGroup.clearLayers();
 
             currentVelocityOverlay = L.imageOverlay(imageUrl, bounds, { opacity: 0.7, errorOverlayUrl: '', interactive: false, pane: 'velocityPane' });
-            currentVelocityOverlay.on('error', function() { console.error(`Failed to load velocity image: ${imageUrl}`); if (map.hasLayer(currentVelocityOverlay)) { velocityLayerGroup.removeLayer(currentVelocityOverlay); } alert(`Could not load velocity data for site ${siteId4Letter}. Image might not be available.`); });
+            currentVelocityOverlay.on('error', function() { console.error(`Failed to load velocity image: ${imageUrl}`); if (map.hasLayer(currentVelocityOverlay)) { velocityLayerGroup.removeLayer(currentVelocityOverlay); } alert(`Could not load velocity data for site ${siteId4Letter}. Image might not be available at IEM.`); });
             currentVelocityOverlay.on('load', function() { console.log(`Successfully loaded velocity image: ${imageUrl}`); });
             velocityLayerGroup.addLayer(currentVelocityOverlay);
             console.log(`Velocity layer prepared for site ${siteId4Letter}. Toggle 'Site Velocity (Tornado)' in layer control to view.`);
-             alert(`Velocity data for nearest site (${siteId4Letter}) is ready. Enable "Site Velocity (Tornado)" in the layer control (top-right) to view.`);
+             alert(`Velocity data for issuing office site (${siteId4Letter}) is ready. Enable "Site Velocity (Tornado)" in the layer control (top-right) to view.`);
         }
 
         // --- Function Definitions END ---
