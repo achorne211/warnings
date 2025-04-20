@@ -1,0 +1,843 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NWS Weather Warning Map</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+          crossorigin=""/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet.opacitycontrols@1.0.0/dist/L.Control.Opacity.css" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+            integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+            crossorigin=""></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.32/Tone.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/leaflet.opacitycontrols@1.0.0/dist/L.Control.Opacity.js"></script>
+
+    <style>
+        /* --- Dark Theme - Left Sidebar Style --- */
+        html, body { height: 100%; margin: 0; padding: 0; font-family: 'Inter', sans-serif; overflow: hidden; background-color: #1f2937; /* gray-800 */ }
+        #map-container { position: relative; height: 100%; flex-grow: 1; }
+        #map { height: 100%; width: 100%; background-color: #374151; /* gray-700 */ }
+
+        /* Sidebar on the Left */
+        #sidebar {
+            height: 100%; overflow-y: hidden; /* Let inner div scroll */ width: 28%; /* Default width */
+            transition: width 0.3s ease-in-out, padding 0.3s ease-in-out;
+            flex-shrink: 0; background-color: rgba(31, 41, 55, 0.9); /* gray-800 with opacity */
+            box-shadow: 2px 0 5px rgba(0,0,0,0.2); /* Shadow on the right */
+            z-index: 1000; border-right: 1px solid #4b5563; /* gray-600 */
+            color: #d1d5db; /* gray-300 default text */
+            display: flex; flex-direction: column; /* Ensure header/content structure */
+        }
+        #sidebar.collapsed { width: 0; padding: 0 !important; overflow: hidden; box-shadow: none; border-right: none; }
+
+        /* Sidebar Header */
+        #sidebar-header {
+             display: flex; justify-content: space-between; align-items: center;
+             padding: 0.75rem 1rem; /* Tailwind p-3/p-4 equivalent */
+             border-bottom: 1px solid #4b5563; /* gray-600 */
+             flex-shrink: 0; /* Prevent header from shrinking */
+        }
+         #sidebar-header h2 { margin: 0; font-size: 1.1rem; color: #f9fafb; } /* Adjusted size/color */
+         #sidebar-toggle { /* Toggle button inside header */
+             background: none; border: none; padding: 0; color: #9ca3af; /* gray-400 */ cursor: pointer;
+         }
+         #sidebar-toggle:hover { color: white; }
+
+
+        /* Loading Indicator - Dark */
+        #loading-indicator { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 1002; display: none; background-color: rgba(55, 65, 81, 0.95); color: #e5e7eb; padding: 16px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3); flex-direction: column; align-items: center; }
+        #loading-indicator svg { margin-bottom: 8px; }
+
+        /* Popups - Dark */
+        .leaflet-popup-content-wrapper { background: #374151; color: #d1d5db; border-radius: 6px; border: 1px solid #4b5563; }
+        .leaflet-popup-tip { background: #374151; }
+        .leaflet-popup-content a { color: #60a5fa; }
+        .leaflet-popup-close-button { color: #d1d5db !important; }
+        .popup-details-btn { display: block; margin-top: 8px; padding: 4px 8px; font-size: 0.8rem; background-color: #4b5563; color: #e5e7eb; border: none; border-radius: 4px; cursor: pointer; transition: background-color 0.2s ease; text-align: center; }
+        .popup-details-btn:hover { background-color: #6b7280; color: white; }
+
+        /* Sidebar Scrollbar - Dark */
+        #sidebar-content::-webkit-scrollbar { width: 8px; } /* Apply to scrolling container */
+        #sidebar-content::-webkit-scrollbar-track { background: #374151; border-radius: 10px; }
+        #sidebar-content::-webkit-scrollbar-thumb { background: #6b7280; border-radius: 10px; }
+        #sidebar-content::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+
+        /* Sidebar Content Area */
+        #sidebar-content { flex-grow: 1; overflow-y: auto; } /* Allow content to scroll */
+
+        /* Sidebar Items - Dark */
+        .warning-item { cursor: pointer; transition: background-color 0.2s ease-in-out; border-radius: 4px; padding: 4px 6px; }
+        .warning-item:hover { background-color: #4b5563; color: #f9fafb; }
+        .warning-item.text-gray-400 { color: #6b7280 !important; }
+
+        /* Category Title - Colored Background */
+        .category-title { cursor: pointer; display: flex; justify-content: space-between; align-items: center; padding: 8px 6px; margin-bottom: 2px; border-radius: 4px; color: white; font-weight: 600; transition: filter 0.2s ease; }
+        .category-title:hover { filter: brightness(1.15); }
+        .category-title .text-gray-400 { color: rgba(255,255,255,0.7) !important; }
+        .category-indicator { color: rgba(255,255,255,0.8); transition: transform 0.2s ease-in-out; font-size: 0.8em; margin-left: 5px; }
+        .category-indicator.expanded { transform: rotate(45deg); }
+        .category-indicator.collapsed { transform: rotate(0deg); }
+        .category-visibility-toggle { cursor: pointer; margin-left: 8px; color: rgba(255,255,255,0.8); padding: 2px; border-radius: 4px; }
+        .category-visibility-toggle:hover { background-color: rgba(255,255,255,0.2); color: white; }
+        .category-visibility-toggle .icon-visible path { fill: #a7f3d0; }
+        .category-visibility-toggle .icon-hidden path { fill: #9ca3af; }
+        .color-key { display: inline-block; width: 12px; height: 12px; margin-right: 6px; border: 1px solid #ccc; vertical-align: middle; border-radius: 2px; }
+
+        /* Filter Controls - Dark */
+        #filter-controls { padding: 8px 10px; background-color: #374151; border-bottom: 1px solid #4b5563; flex-shrink: 0; }
+        #filter-controls h3 { color: #9ca3af; }
+        #filter-controls label { color: #d1d5db; }
+
+        /* Warning List Container */
+        #warning-list { padding: 1rem; padding-top: 0.5rem; }
+
+        /* Leaflet Controls - Dark */
+        .leaflet-control-container .leaflet-top.leaflet-right { z-index: 1001; }
+        .leaflet-control-layers { z-index: 1001; background: rgba(55, 65, 81, 0.9); box-shadow: 0 1px 4px rgba(0,0,0,0.3); border-radius: 6px; }
+        .leaflet-control-layers-base label, .leaflet-control-layers-overlays label { color: #d1d5db; }
+        .leaflet-control-layers-separator { border-top: 1px solid #4b5563; }
+        .leaflet-control-opacity { background: rgba(55, 65, 81, 0.9); box-shadow: 0 1px 4px rgba(0,0,0,0.3); border-radius: 6px; }
+        .leaflet-control-scale-line { background: rgba(55, 65, 81, 0.7); border-color: #9ca3af; color: #d1d5db; }
+
+        /* New Warning Popup - Dark */
+        #new-warning-popup { position: fixed; bottom: 40px; right: 20px; background-color: rgba(0, 0, 0, 0.85); color: white; padding: 12px 18px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4); z-index: 1100; max-width: 350px; display: none; opacity: 0; transition: opacity 0.5s ease-in-out; }
+        #new-warning-popup.visible { display: block; opacity: 1; }
+        #new-warning-popup button { background-color: #3b82f6; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; margin-left: 10px; font-size: 0.8rem; transition: background-color 0.2s ease; }
+        #new-warning-popup button:hover { background-color: #2563eb; }
+        #new-warning-popup .close-btn { background-color: transparent; color: #ccc; padding: 0 5px; margin-left: 15px; }
+        #new-warning-popup .close-btn:hover { color: white; }
+
+        /* Bottom Left Info Panel */
+        #bottom-left-info { position: absolute; bottom: 10px; left: 10px; background-color: rgba(31, 41, 55, 0.85); color: #e5e7eb; padding: 8px 12px; border-radius: 6px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5); z-index: 1000; max-width: 350px; font-size: 0.8rem; line-height: 1.3; }
+        #recent-warning-bl { cursor: pointer; text-decoration: underline; }
+        #recent-warning-bl:hover { color: white; }
+
+        /* Right Count Bar */
+        #count-bar { position: absolute; bottom: 10px; right: 10px; width: auto; background-color: rgba(31, 41, 55, 0.85); color: #e5e7eb; border-radius: 6px; padding: 5px 8px; box-shadow: -2px -2px 5px rgba(0,0,0,0.3); z-index: 1000; display: flex; flex-direction: row; align-items: center; font-size: 0.7rem; text-align: center; }
+        .count-item { margin-left: 8px; padding: 2px 4px; width: auto; border-radius: 4px; border: 1px solid transparent; display: flex; align-items: center; gap: 4px; }
+        .count-item:first-child { margin-left: 0; }
+        .count-item strong { display: inline; font-size: 0.9rem; font-weight: bold; }
+        .count-item span { display: inline; font-size: 0.65rem; text-transform: uppercase; }
+
+        /* Modal Dialog for Full Details */
+        #modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.6); z-index: 1190; display: none; }
+        #modal-dialog { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: #1f2937; color: #e5e7eb; padding: 25px; border-radius: 8px; box-shadow: 0 5px 15px rgba(0,0,0,0.5); width: 90%; max-width: 600px; z-index: 1200; display: none; max-height: 80vh; overflow-y: auto; }
+        #modal-dialog h2 { margin-top: 0; color: white; border-bottom: 1px solid #4b5563; padding-bottom: 10px; margin-bottom: 15px; font-size: 1.2rem;}
+        #modal-content { white-space: pre-wrap; font-size: 0.9rem; line-height: 1.5; }
+        #modal-close-btn { position: absolute; top: 10px; right: 15px; background: none; border: none; color: #9ca3af; font-size: 1.8rem; font-weight: bold; cursor: pointer; line-height: 1; }
+        #modal-close-btn:hover { color: white; }
+
+        /* Custom Panes for Stacking */
+        .leaflet-pane .leaflet-advisory-pane { z-index: 410; }
+        .leaflet-pane .leaflet-watch-pane { z-index: 420; }
+        .leaflet-pane .leaflet-warning-pane { z-index: 430; }
+        .leaflet-pane .leaflet-high-warning-pane { z-index: 440; }
+        .leaflet-pane .leaflet-velocity-pane { z-index: 510; }
+
+        /* Top Scrolling Ticker */
+        #top-ticker-bar { position: absolute; top: 0; left: 0; width: 100%; height: 30px; background-color: #dc2626; color: white; overflow: hidden; z-index: 1001; display: none; box-shadow: 0 2px 5px rgba(0,0,0,0.3); }
+        #top-ticker-bar.visible { display: block; }
+        #top-ticker-content-wrapper { width: 100%; height: 100%; position: relative; }
+        #top-ticker-content { position: absolute; top: 0; left: 0; white-space: nowrap; line-height: 30px; font-weight: 600; animation-name: scroll-left; animation-timing-function: linear; animation-iteration-count: infinite; }
+        #top-ticker-bar:hover #top-ticker-content { animation-play-state: paused; }
+        @keyframes scroll-left { 0% { transform: translateX(100%); } 100% { transform: translateX(-100%); } }
+
+    </style>
+</head>
+<body class="flex h-screen bg-gray-900">
+
+    <div id="sidebar" class="bg-gray-800/90 shadow-lg text-gray-300">
+         <div id="sidebar-header"> <h2 class="text-xl font-bold text-gray-100">Active NWS Alerts</h2> <button id="sidebar-toggle" title="Toggle Sidebar"> <svg id="sidebar-toggle-icon" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"> </svg> </button> </div>
+         <div id="sidebar-content" class="flex-grow overflow-y-auto">
+             <div id="filter-controls" class="mb-3 flex-shrink-0 space-y-2"> <h3 class="text-sm font-semibold text-gray-400">Filter Alert Types:</h3> <div class="flex space-x-4"> <label class="inline-flex items-center text-xs cursor-pointer"> <input type="checkbox" id="filter-warning" class="form-checkbox h-4 w-4 text-red-500 rounded mr-1 bg-gray-600 border-gray-500 focus:ring-red-600" checked> <span class="text-gray-200">Warnings</span> </label> <label class="inline-flex items-center text-xs cursor-pointer"> <input type="checkbox" id="filter-watch" class="form-checkbox h-4 w-4 text-yellow-400 rounded mr-1 bg-gray-600 border-gray-500 focus:ring-yellow-500" checked> <span class="text-gray-200">Watches</span> </label> <label class="inline-flex items-center text-xs cursor-pointer"> <input type="checkbox" id="filter-advisory" class="form-checkbox h-4 w-4 text-blue-400 rounded mr-1 bg-gray-600 border-gray-500 focus:ring-blue-500" checked> <span class="text-gray-200">Advisories</span> </label> </div> </div>
+             <div id="warning-list" class="space-y-1 p-4 pt-0"> <p class="text-gray-400 p-2" id="sidebar-status">Initializing...</p> </div>
+         </div>
+    </div>
+
+    <div id="map-container" class="w-full h-full">
+        <div id="top-ticker-bar"> <div id="top-ticker-content-wrapper"> <div id="top-ticker-content"></div> </div> </div>
+        <div id="map"></div>
+        <div id="bottom-left-info"> <div id="current-time-bl">--:--:--</div> <div id="recent-warning-bl" title="Click to view latest new alert">No new alerts recently.</div> </div>
+         <div id="count-bar"> <div id="count-tor" class="count-item"><strong>0</strong><span>TOR</span></div> <div id="count-svr" class="count-item"><strong>0</strong><span>SVR</span></div> <div id="count-ffw" class="count-item"><strong>0</strong><span>FFW</span></div> <div id="count-fld" class="count-item"><strong>0</strong><span>FLD</span></div> <div id="count-sws" class="count-item"><strong>0</strong><span>SWS</span></div> </div>
+        <div id="new-warning-popup"> <span id="new-warning-popup-text">New Warning!</span> <button id="new-warning-popup-view-btn">View</button> <button class="close-btn" onclick="dismissNewWarningPopup()">✕</button> </div>
+        <div id="loading-indicator" class="bg-gray-700/95 text-gray-200 p-4 rounded-lg shadow-lg flex flex-col items-center space-y-2"> <svg class="animate-spin h-8 w-8 text-blue-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"> <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle> <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path> </svg> <span id="loading-indicator-text">Loading alerts...</span> </div>
+    </div>
+
+    <div id="modal-overlay"></div>
+    <div id="modal-dialog">
+        <button id="modal-close-btn" onclick="hideModal()">×</button>
+        <h2 id="modal-title">Warning Details</h2>
+        <div id="modal-content"></div>
+    </div>
+
+    <script>
+        // --- Configuration ---
+        const NWS_API_URL = 'https://api.weather.gov/alerts/active?status=actual&message_type=alert,update,cancel';
+        const POLLING_INTERVAL_MS = 5 * 60 * 1000;
+        const MAP_CENTER = [39.8283, -98.5795];
+        const MAP_ZOOM = 4;
+        const RADAR_TILE_URL = 'https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-n0q-900913/{z}/{x}/{y}.png';
+        const SAT_TILE_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+        const STREET_TILE_URL = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+        const DARK_TILE_URL = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+        const DARK_TILE_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>';
+        const VELOCITY_IMG_URL_TEMPLATE = 'https://mesonet.agron.iastate.edu/data/gis/images/4326/ridge/{siteid}/N0S_0.png';
+        const NEW_POPUP_TIMEOUT_MS = 15000;
+        const TICKER_CHARS_PER_SECOND = 15; // Adjust speed: lower = faster scroll
+        const CRITICAL_WARNING_PRIORITY_THRESHOLD = 11;
+        const VELOCITY_BOUND_OFFSET_DEG = 1.5; // Approx. bounds offset
+
+        // --- Global State ---
+        let map; let baseLayers = {}; let overlayLayers = {}; let layerControl; let radarLayer;
+        let warningLayers = {}; let displayedWarningIds = new Set(); let synth;
+        let categoryCollapseState = {}; let categoryVisibilityState = {};
+        let visibleTypes = { Warning: true, Watch: true, Advisory: true };
+        let isSidebarOpen = true;
+        let newWarningPopupTimeout = null;
+        let latestNewWarningInfo = null;
+        let velocityLayerGroup = null;
+        let currentVelocityOverlay = null;
+
+        // --- DOM Elements ---
+        let warningListContainer, loadingIndicator, sidebar, sidebarToggle, sidebarToggleIcon,
+            filterWarningCheckbox, filterWatchCheckbox, filterAdvisoryCheckbox, newWarningPopup, newWarningPopupText,
+            newWarningPopupViewBtn, sidebarStatus, loadingIndicatorText,
+            currentTimeDisplayBl, recentWarningDisplayBl,
+            countBar, countTor, countSvr, countFfw, countFld, countSws,
+            modalOverlay, modalDialog, modalTitle, modalContent, modalCloseBtn,
+            topTickerBar, topTickerContent;
+
+        // --- Radar Site Data ---
+        const radarSites = {
+            "KABR": { lat: 45.45, lon: -98.41 }, "KABX": { lat: 34.57, lon: -106.82 }, "KAKQ": { lat: 36.90, lon: -76.02 },
+            "KAMA": { lat: 35.23, lon: -101.71 }, "PAHG": { lat: 61.57, lon: -149.10 }, "KBBX": { lat: 38.44, lon: -107.90 },
+            "KBGM": { lat: 42.21, lon: -75.99 }, "KBHX": { lat: 40.50, lon: -124.10 }, "KBIS": { lat: 46.77, lon: -100.76 },
+            "KBLX": { lat: 44.03, lon: -90.37 }, "KBMX": { lat: 33.17, lon: -86.78 }, "KBOX": { lat: 41.95, lon: -71.14 },
+            "KBRO": { lat: 25.91, lon: -97.42 }, "KBUF": { lat: 42.94, lon: -78.74 }, "KBYX": { lat: 29.50, lon: -81.05 },
+            "KCAE": { lat: 33.95, lon: -81.12 }, "KCBW": { lat: 47.04, lon: -109.26 }, "KCBX": { lat: 43.70, lon: -116.15 },
+            "KCLE": { lat: 41.41, lon: -81.86 }, "KCLX": { lat: 32.80, lon: -80.00 }, "KCRP": { lat: 27.78, lon: -97.51 },
+            "KCXX": { lat: 44.49, lon: -73.17 }, "KCYS": { lat: 41.15, lon: -104.81 }, "KDAX": { lat: 38.46, lon: -121.60 },
+            "KDDC": { lat: 37.76, lon: -99.97 }, "KDFX": { lat: 29.70, lon: -90.80 }, "KDGX": { lat: 32.47, lon: -88.88 },
+            "KDIX": { lat: 39.96, lon: -74.59 }, "KDLH": { lat: 46.83, lon: -92.21 }, "KDMX": { lat: 41.73, lon: -93.72 },
+            "KDOX": { lat: 38.46, lon: -75.34 }, "KDTX": { lat: 42.69, lon: -83.48 }, "KDVN": { lat: 41.61, lon: -90.58 },
+            "KDYX": { lat: 32.41, lon: -99.68 }, "KEAX": { lat: 39.26, lon: -94.67 }, "KEMX": { lat: 31.90, lon: -106.60 },
+            "KENX": { lat: 42.56, lon: -78.04 }, "KEOX": { lat: 30.04, lon: -85.70 }, "KEPZ": { lat: 31.90, lon: -106.60 },
+            "KESX": { lat: 36.80, lon: -116.00 }, "KEVX": { lat: 30.54, lon: -87.38 }, "KEWX": { lat: 29.72, lon: -98.62 },
+            "KEYX": { lat: 35.34, lon: -119.06 }, "KFCX": { lat: 37.09, lon: -88.47 }, "KFDR": { lat: 34.65, lon: -99.28 },
+            "KFDX": { lat: 35.15, lon: -106.82 }, "KFFC": { lat: 33.36, lon: -84.57 }, "KFSD": { lat: 43.58, lon: -96.75 },
+            "KFSX": { lat: 36.18, lon: -111.86 }, "KFTG": { lat: 39.79, lon: -104.55 }, "KFTW": { lat: 32.82, lon: -97.30 },
+            "KGGW": { lat: 48.20, lon: -106.62 }, "KGJX": { lat: 39.06, lon: -108.22 }, "KGLD": { lat: 39.37, lon: -101.69 },
+            "KGRB": { lat: 44.50, lon: -88.13 }, "KGRK": { lat: 31.06, lon: -97.82 }, "KGRR": { lat: 42.89, lon: -85.53 },
+            "KGSP": { lat: 34.89, lon: -82.22 }, "KGWX": { lat: 32.56, lon: -86.49 }, "KGYX": { lat: 43.89, lon: -70.26 },
+            "KHDX": { lat: 34.85, lon: -86.77 }, "KHGX": { lat: 29.47, lon: -95.08 }, "KHNX": { lat: 36.31, lon: -119.63 },
+            "KHPX": { lat: 36.38, lon: -89.59 }, "KHTX": { lat: 34.85, lon: -86.77 }, "KICT": { lat: 37.65, lon: -97.44 },
+            "KICX": { lat: 40.49, lon: -88.99 }, "KILN": { lat: 39.43, lon: -83.62 }, "KILX": { lat: 40.15, lon: -89.34 },
+            "KIND": { lat: 39.71, lon: -86.29 }, "KINX": { lat: 35.33, lon: -94.37 }, "KIWX": { lat: 41.36, lon: -85.70 },
+            "KJAX": { lat: 30.48, lon: -81.70 }, "KJGX": { lat: 32.31, lon: -86.19 }, "KJKL": { lat: 37.59, lon: -83.31 },
+            "KLBB": { lat: 33.65, lon: -101.82 }, "KLCH": { lat: 30.12, lon: -93.22 }, "KLIX": { lat: 30.34, lon: -90.03 },
+            "KLNX": { lat: 41.96, lon: -100.57 }, "KLOT": { lat: 41.60, lon: -88.09 }, "KLRX": { lat: 40.70, lon: -111.95 },
+            "KLSX": { lat: 38.71, lon: -90.69 }, "KLTX": { lat: 34.09, lon: -81.36 }, "KLVX": { lat: 37.98, lon: -87.74 },
+            "KLWX": { lat: 38.97, lon: -77.48 }, "KLZK": { lat: 34.83, lon: -92.26 }, "KMAF": { lat: 31.94, lon: -102.19 },
+            "KMAX": { lat: 44.85, lon: -123.00 }, "KMBX": { lat: 46.77, lon: -100.76 }, "KMHX": { lat: 34.77, lon: -76.87 },
+            "KMKX": { lat: 43.07, lon: -88.24 }, "KMLB": { lat: 28.11, lon: -80.65 }, "KMOB": { lat: 30.68, lon: -88.24 },
+            "KMPX": { lat: 44.85, lon: -93.56 }, "KMQT": { lat: 46.53, lon: -87.55 }, "KMRX": { lat: 35.82, lon: -83.40 },
+            "KMSX": { lat: 47.46, lon: -111.38 }, "KMTX": { lat: 40.77, lon: -111.96 }, "KMUX": { lat: 37.49, lon: -121.90 },
+            "KMVX": { lat: 47.95, lon: -97.32 }, "KNKX": { lat: 32.98, lon: -117.12 }, "KNQA": { lat: 35.43, lon: -89.87 },
+            "KOAX": { lat: 41.32, lon: -96.01 }, "KOHX": { lat: 36.24, lon: -86.56 }, "KOKX": { lat: 40.97, lon: -72.66 },
+            "KOTX": { lat: 47.68, lon: -117.68 }, "KPAH": { lat: 37.07, lon: -88.77 }, "KPBZ": { lat: 40.53, lon: -80.22 },
+            "KPDT": { lat: 45.69, lon: -118.84 }, "KPOE": { lat: 30.04, lon: -90.80 }, "KPUX": { lat: 38.88, lon: -104.71 },
+            "KRAX": { lat: 35.77, lon: -78.49 }, "KRGX": { lat: 39.71, lon: -118.70 }, "KRIW": { lat: 43.07, lon: -108.47 },
+            "KRLX": { lat: 38.80, lon: -81.71 }, "KRTX": { lat: 45.00, lon: -123.00 }, "KSFX": { lat: 43.78, lon: -111.97 },
+            "KSGF": { lat: 37.23, lon: -93.38 }, "KSHV": { lat: 32.45, lon: -93.84 }, "KSJT": { lat: 31.37, lon: -100.49 },
+            "KSOX": { lat: 33.99, lon: -117.64 }, "KSRX": { lat: 34.20, lon: -93.09 }, "KTBW": { lat: 27.71, lon: -82.40 },
+            "KTFX": { lat: 47.46, lon: -111.38 }, "KTLH": { lat: 30.39, lon: -84.37 }, "KTLX": { lat: 35.33, lon: -97.28 },
+            "KTWX": { lat: 39.07, lon: -97.66 }, "KUDX": { lat: 41.96, lon: -100.57 }, "KUEX": { lat: 40.29, lon: -96.45 },
+            "KVNX": { lat: 34.10, lon: -119.11 }, "KVTX": { lat: 34.10, lon: -119.11 }, "KVWX": { lat: 37.98, lon: -87.74 },
+            "KYUX": { lat: 32.66, lon: -114.61 }
+        };
+
+        // --- Eye Icons SVG / NWS Colors ---
+        const eyeIconVisibleSVG = `<svg class="icon-visible w-4 h-4 inline-block" viewBox="0 0 20 20" fill="currentColor"><path d="M10 12a2 2 0 100-4 2 2 0 000 4z" /><path fill-rule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.022 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd" /></svg>`;
+        const eyeIconHiddenSVG = `<svg class="icon-hidden w-4 h-4 inline-block" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3.707 2.293a1 1 0 00-1.414 1.414l14 14a1 1 0 001.414-1.414l-1.473-1.473A10.014 10.014 0 0019.542 10C18.268 5.943 14.478 3 10 3a9.958 9.958 0 00-4.512 1.074l-1.78-1.781zm4.261 4.26l1.514 1.515a2.003 2.003 0 01-2.45 2.45l-1.514-1.514a4 4 0 00-1.44-1.44l-1.514-1.514a4.007 4.007 0 00-1.439 1.44zM10 17a7.002 7.002 0 004.473-1.58l-1.18-1.18A4.003 4.003 0 0110 14a4 4 0 01-3.293-1.76l-1.18 1.18A7.002 7.002 0 0010 17z" clip-rule="evenodd" /><path d="M12.949 12.95l-1.414-1.414a2 2 0 01-2.828-2.828l-1.414-1.414a4 4 0 005.656 5.656z" /></svg>`;
+        const sidebarOpenIconSVG = `<path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />`; // Close icon (X)
+        const sidebarCloseIconSVG = `<path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16" />`; // Hamburger icon
+        const nwsEventColors = {
+            'tornado warning': '#FF0000', 'severe thunderstorm warning': '#FFA500', 'tornado watch': '#FFFF00', 'severe thunderstorm watch': '#DB7093',
+            'flash flood warning': '#8B0000', 'flood warning': '#00FF00', 'flash flood watch': '#2E8B57', 'flood watch': '#2E8B57', 'flood advisory': '#00FF00', 'hydrologic advisory': '#00FF00', 'hydrologic outlook': '#90EE90',
+            'blizzard warning': '#FF00FF', 'winter storm warning': '#FF69B4', 'ice storm warning': '#8A2BE2', 'winter weather advisory': '#7B68EE', 'winter storm watch': '#4682B4', 'wind chill warning': '#AFEEEE', 'wind chill advisory': '#AFEEEE', 'freeze warning': '#483D8B', 'freeze watch': '#483D8B', 'hard freeze warning': '#483D8B', 'hard freeze watch': '#483D8B', 'frost advisory': '#E6E6FA',
+            'hurricane warning': '#DC143C', 'typhoon warning': '#DC143C', 'hurricane watch': '#FF4500', 'typhoon watch': '#FF4500', 'storm warning': '#9400D3', 'storm watch': '#9932CC', 'tropical storm warning': '#B22222', 'tropical storm watch': '#FF7F50', 'coastal flood warning': '#6A5ACD', 'coastal flood watch': '#20B2AA', 'coastal flood advisory': '#20B2AA', 'high surf warning': '#0000CD', 'high surf advisory': '#0000CD', 'rip current statement': '#40E0D0', 'beach hazards statement': '#40E0D0', 'small craft advisory': '#DDA0DD', 'gale warning': '#D8BFD8', 'gale watch': '#D8BFD8',
+            'high wind warning': '#DAA520', 'high wind watch': '#DAA520', 'wind advisory': '#D2B48C', 'lake wind advisory': '#D2B48C', 'dust storm warning': '#B8860B', 'dust advisory': '#F5DEB3', 'dense fog advisory': '#808080', 'dense smoke advisory': '#808080',
+            'fire warning': '#FF4500', 'red flag warning': '#A52A2A',
+            'excessive heat warning': '#C71585', 'heat advisory': '#FF8C00', 'excessive heat watch': '#C71585', 'extreme cold warning': '#00008B', 'extreme cold watch': '#00008B', 'wind chill watch': '#ADD8E6',
+            'special weather statement': '#FFE4B5', 'air quality alert': '#BEBEBE', 'ashfall advisory': '#A9A9A9', 'civil danger warning': '#FA8072', 'civil emergency message': '#FA8072', 'local area emergency': '#FA8072', 'special marine warning': '#FFA500',
+            'default': '#CCCCCC'
+         };
+
+        // --- Initialization ---
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log("DOM Loaded. Initializing application...");
+            // Assign DOM Elements
+            warningListContainer = document.getElementById('warning-list');
+            loadingIndicator = document.getElementById('loading-indicator');
+            sidebar = document.getElementById('sidebar');
+            sidebarToggle = document.getElementById('sidebar-toggle');
+            sidebarToggleIcon = document.getElementById('sidebar-toggle-icon');
+            filterWarningCheckbox = document.getElementById('filter-warning');
+            filterWatchCheckbox = document.getElementById('filter-watch');
+            filterAdvisoryCheckbox = document.getElementById('filter-advisory');
+            newWarningPopup = document.getElementById('new-warning-popup');
+            newWarningPopupText = document.getElementById('new-warning-popup-text');
+            newWarningPopupViewBtn = document.getElementById('new-warning-popup-view-btn');
+            sidebarStatus = document.getElementById('sidebar-status');
+            loadingIndicatorText = document.getElementById('loading-indicator-text');
+            currentTimeDisplayBl = document.getElementById('current-time-bl');
+            recentWarningDisplayBl = document.getElementById('recent-warning-bl');
+            countBar = document.getElementById('count-bar');
+            countTor = document.getElementById('count-tor');
+            countSvr = document.getElementById('count-svr');
+            countFfw = document.getElementById('count-ffw');
+            countFld = document.getElementById('count-fld');
+            countSws = document.getElementById('count-sws');
+            modalOverlay = document.getElementById('modal-overlay');
+            modalDialog = document.getElementById('modal-dialog');
+            modalTitle = document.getElementById('modal-title');
+            modalContent = document.getElementById('modal-content');
+            modalCloseBtn = document.getElementById('modal-close-btn');
+            topTickerBar = document.getElementById('top-ticker-bar');
+            topTickerContent = document.getElementById('top-ticker-content');
+
+
+            if (!warningListContainer || !loadingIndicator || !sidebar || !sidebarToggle || !document.getElementById('map') || !currentTimeDisplayBl || !recentWarningDisplayBl || !countBar || !modalOverlay || !modalDialog || !topTickerBar || !topTickerContent) {
+                console.error("CRITICAL ERROR: Essential DOM elements not found. Aborting initialization.");
+                alert("Error initializing the application: Core HTML elements missing.");
+                if(loadingIndicator) loadingIndicator.style.display = 'none';
+                return;
+            }
+
+            sidebarStatus.textContent = "Initializing map...";
+            showLoading("Initializing map...");
+
+            try {
+                initializeMap();
+                if (!map) { throw new Error("Map object could not be created by initializeMap()."); }
+                initializeSound();
+                setupEventListeners();
+                updateSidebarState();
+                updateTime();
+                setInterval(updateTime, 1000);
+                console.log("Initialization complete. Performing initial fetch...");
+                sidebarStatus.textContent = "Loading alerts...";
+                fetchWarnings();
+                setInterval(fetchWarnings, POLLING_INTERVAL_MS);
+            } catch (error) {
+                console.error("FATAL ERROR during initialization:", error);
+                if(sidebarStatus) sidebarStatus.textContent = `Initialization failed: ${error.message}`;
+                if(loadingIndicatorText) loadingIndicatorText.textContent = "Error during startup.";
+                if (loadingIndicator) loadingIndicator.style.display = 'flex';
+                alert(`Application failed to initialize:\n${error.message}\n\nPlease check the console for details.`);
+            }
+        });
+
+        // --- Function Definitions START ---
+
+        /** Setup button/filter event listeners */
+        function setupEventListeners() {
+             console.log("Setting up event listeners...");
+             try {
+                 if (!sidebarToggle || !filterWarningCheckbox || !filterWatchCheckbox || !filterAdvisoryCheckbox || !recentWarningDisplayBl || !modalOverlay || !modalCloseBtn) {
+                      console.error("One or more elements needed for event listeners not found!"); return;
+                 }
+                 sidebarToggle.addEventListener('click', toggleSidebar);
+                 filterWarningCheckbox.addEventListener('change', handleFilterChange);
+                 filterWatchCheckbox.addEventListener('change', handleFilterChange);
+                 filterAdvisoryCheckbox.addEventListener('change', handleFilterChange);
+                 recentWarningDisplayBl.addEventListener('click', handleRecentWarningClick);
+                 modalOverlay.addEventListener('click', hideModal);
+                 modalCloseBtn.addEventListener('click', hideModal);
+
+                  console.log("Event listeners setup complete.");
+             } catch (error) { console.error("Error setting up event listeners:", error); }
+         }
+
+        /** Initializes the Leaflet map with layers and panes */
+        function initializeMap() {
+            console.log("Initializing map...");
+            if (!L) { throw new Error("Leaflet library (L) not loaded!"); }
+            const mapElement = document.getElementById('map');
+            if (!mapElement) { throw new Error("Map container element '#map' not found!"); }
+            if (mapElement.offsetHeight <= 0 || mapElement.offsetWidth <= 0) { console.warn("Map container may have no dimensions yet."); }
+
+            try {
+                const streets = L.tileLayer(STREET_TILE_URL, { attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors', maxZoom: 18 });
+                const satellite = L.tileLayer(SAT_TILE_URL, { attribution: 'Tiles &copy; Esri', maxZoom: 18 });
+                const dark = L.tileLayer(DARK_TILE_URL, { attribution: DARK_TILE_ATTRIBUTION, subdomains: 'abcd', maxZoom: 19 });
+                baseLayers = { "Dark": dark, "Streets": streets, "Satellite": satellite };
+
+                radarLayer = L.tileLayer(RADAR_TILE_URL, { attribution: 'Radar &copy; IEM', opacity: 0.6, zIndex: 500 });
+                velocityLayerGroup = L.layerGroup();
+                overlayLayers = {
+                    "Weather Radar": radarLayer,
+                    "Site Velocity (Tornado)": velocityLayerGroup
+                };
+
+                if (map) { map.remove(); }
+                map = L.map('map', { center: MAP_CENTER, zoom: MAP_ZOOM, layers: [dark, radarLayer] });
+                console.log("Map object created.");
+
+                // Create Custom Panes
+                map.createPane('advisoryPane'); map.getPane('advisoryPane').style.zIndex = 410;
+                map.createPane('watchPane'); map.getPane('watchPane').style.zIndex = 420;
+                map.createPane('warningPane'); map.getPane('warningPane').style.zIndex = 430;
+                map.createPane('highWarningPane'); map.getPane('highWarningPane').style.zIndex = 440;
+                map.createPane('velocityPane'); map.getPane('velocityPane').style.zIndex = 510;
+                map.getPane('overlayPane').style.zIndex = 400; map.getPane('shadowPane').style.zIndex = 390;
+                map.getPane('markerPane').style.zIndex = 520; map.getPane('tooltipPane').style.zIndex = 650; map.getPane('popupPane').style.zIndex = 700;
+                console.log("Custom map panes created.");
+
+                // Tile Error Listeners
+                dark.on('tileerror', (e) => console.error('Dark tile error:', e));
+                streets.on('tileerror', (e) => console.error('Street tile error:', e));
+                satellite.on('tileerror', (e) => console.error('Satellite tile error:', e));
+                radarLayer.on('tileerror', (e) => console.error('Radar tile error:', e));
+
+                // Add Controls (Opacity moved back to bottomright)
+                layerControl = L.control.layers(baseLayers, overlayLayers, { position: 'topright', collapsed: true }).addTo(map);
+                if (L.control.opacity) {
+                    try { L.control.opacity(overlayLayers, { label: null, collapsed: true, position: 'bottomright', title: 'Adjust Layer Opacity' }).addTo(map); console.log("Opacity control added bottomright."); }
+                    catch (opacityError) { console.error("Error adding Opacity Control:", opacityError); }
+                } else { console.warn("Opacity Control plugin not found."); }
+                L.control.scale({ position: 'bottomleft' }).addTo(map);
+                console.log("Map controls added.");
+
+                setTimeout(() => { if (map) { map.invalidateSize(); console.log("Map size invalidated."); } }, 100);
+                 console.log("Map initialization complete.");
+            } catch (error) { console.error("Error during map initialization:", error); throw error; } // Re-throw error
+        }
+
+        /** Initializes Tone.js synth */
+        function initializeSound() {
+            console.log("Initializing sound...");
+             try {
+                 if (typeof Tone !== 'undefined' && Tone.Synth) {
+                    synth = new Tone.Synth({ oscillator: { type: 'sine' }, envelope: { attack: 0.005, decay: 0.1, sustain: 0.3, release: 1 } }).toDestination();
+                    console.log("Tone.js Synth initialized.");
+                 } else { console.warn("Tone.js library not fully loaded or Synth unavailable."); synth = null; }
+            } catch (error) { console.error("Failed to initialize Tone.js synth:", error); synth = null; }
+        }
+
+        /** Plays notification sound */
+        function playNotificationSound() {
+            if (!synth) { console.warn("Audio synth not available."); return; }
+            Tone.start().then(() => {
+                if (synth && Tone.context.state === 'running') { console.log("Playing notification sound."); synth.triggerAttackRelease("C5", "8n", Tone.now()); }
+                else { console.warn("Tone.js context not running, cannot play sound."); }
+            }).catch(error => { console.warn("Tone.js context couldn't start automatically (may need user interaction).", error); });
+        }
+
+        /** Shows loading indicator */
+        function showLoading(text = "Loading alerts...") { if (loadingIndicator) { loadingIndicatorText.textContent = text; loadingIndicator.style.display = 'flex'; } }
+        /** Hides loading indicator */
+        function hideLoading() { if (loadingIndicator) loadingIndicator.style.display = 'none'; }
+
+        /** Toggles the sidebar visibility */
+        function toggleSidebar() { isSidebarOpen = !isSidebarOpen; updateSidebarState(); }
+
+        /** Updates sidebar CSS class and toggle icon */
+        function updateSidebarState() {
+             if (!sidebar || !sidebarToggleIcon || !map) return;
+             try {
+                 if (isSidebarOpen) { sidebar.classList.remove('collapsed'); sidebarToggleIcon.innerHTML = sidebarOpenIconSVG; } // X Icon when open
+                 else { sidebar.classList.add('collapsed'); sidebarToggleIcon.innerHTML = sidebarCloseIconSVG; } // Hamburger Icon when closed
+                 setTimeout(() => { if (map) map.invalidateSize(); }, 300);
+             } catch(error) { console.error("Error updating sidebar state:", error); }
+        }
+
+        /** Handles changes in filter checkboxes */
+        function handleFilterChange() {
+            visibleTypes.Warning = filterWarningCheckbox.checked; visibleTypes.Watch = filterWatchCheckbox.checked; visibleTypes.Advisory = filterAdvisoryCheckbox.checked;
+            console.log("Type Filters updated:", visibleTypes);
+            try { updateMapLayerVisibility(); rerenderSidebar(); }
+            catch (error) { console.error("Error applying filter change:", error); }
+        }
+
+        /** Handles click on category visibility toggle */
+        function handleCategoryVisibilityToggle(categoryName, event) {
+             event.stopPropagation();
+             const currentState = categoryVisibilityState[categoryName]; categoryVisibilityState[categoryName] = !currentState;
+             console.log(`Category visibility toggled for "${categoryName}": ${!currentState}`);
+             try { updateMapLayerVisibility(); rerenderSidebar(); }
+             catch (error) { console.error(`Error toggling visibility for category ${categoryName}:`, error); }
+        }
+
+        /** Rerenders the sidebar using existing data */
+        function rerenderSidebar() {
+             console.log("Rerendering sidebar...");
+             if (!warningListContainer) return;
+             try {
+                 // Get current features from warningLayers
+                 const currentFeatures = Object.values(warningLayers).map(item => item.feature);
+                 if (currentFeatures.length > 0) {
+                     updateSidebar(groupWarningsByCategory(currentFeatures));
+                 } else {
+                     if(sidebarStatus) sidebarStatus.textContent = "No active alerts loaded.";
+                     // Ensure list is cleared if no features
+                     warningListContainer.innerHTML = `<p class="text-gray-400 p-2">No active alerts loaded.</p>`;
+                 }
+             } catch (error) { console.error("Error during sidebar rerender:", error); if(sidebarStatus) sidebarStatus.textContent = "Error updating sidebar."; }
+        }
+
+
+        /** Fetches warnings from NWS API */
+        async function fetchWarnings() {
+            console.log("Fetching warnings from:", NWS_API_URL);
+            try {
+                const response = await fetch(NWS_API_URL, { headers: { 'Accept': 'application/geo+json', 'User-Agent': '(NWS Warning Map App v2.2, user@example.com)' }, cache: 'no-cache' });
+                console.log("Fetch response status:", response.status);
+                if (!response.ok) { const errorText = await response.text(); console.error(`HTTP error! Status: ${response.status}, Body: ${errorText}`); throw new Error(`HTTP error ${response.status}`); }
+                const data = await response.json();
+                console.log("Warnings data received:", data.features ? `${data.features.length} features` : "No features array");
+                if (!data.features) { console.warn("Received data does not contain a 'features' array.", data); processWarnings([]); }
+                else { processWarnings(data.features); }
+            } catch (error) {
+                console.error("Error fetching NWS warnings:", error);
+                if(sidebarStatus) sidebarStatus.textContent = `Error loading alerts: ${error.message}`;
+                hideLoading();
+            } finally {
+                 // Hide loading indicator logic moved inside processWarnings success/error
+            }
+        }
+
+        /** Processes warnings, updates state, map, and sidebar */
+        function processWarnings(features) {
+            console.log(`Processing ${features.length} features...`);
+            const currentWarningIds = new Set(); const newWarnings = []; const activeFeatures = [];
+             try {
+                 features.sort((a, b) => (new Date(b.properties?.effective || 0)) - (new Date(a.properties?.effective || 0)));
+                features.forEach(feature => {
+                    if (!feature?.properties?.id) { console.warn("Skipping invalid feature:", feature); return; }
+                    const props = feature.properties; const id = props.id;
+                    if (props.status === 'Cancel' || props.messageType === 'Cancel') { removeWarning(id); return; }
+                    feature.properties.alertType = getAlertType(props.event);
+                    feature.properties.category = props.event || 'Unknown Event';
+                    currentWarningIds.add(id); activeFeatures.push(feature);
+                    if (!displayedWarningIds.has(id)) {
+                        newWarnings.push(feature); displayedWarningIds.add(id);
+                        if (categoryVisibilityState[props.category] === undefined) { categoryVisibilityState[props.category] = true; }
+                        if (categoryCollapseState[props.category] === undefined) { categoryCollapseState[props.category] = false; }
+                    }
+                    addOrUpdateWarningData(feature);
+                });
+
+                console.log("Processing: Removing expired warnings...");
+                removeExpiredWarnings(currentWarningIds);
+                console.log("Processing: Updating map layer visibility...");
+                updateMapLayerVisibility();
+                console.log("Processing: Updating sidebar...");
+                updateSidebar(groupWarningsByCategory(activeFeatures));
+                console.log("Processing: Updating count bar...");
+                updateCountBar(activeFeatures);
+                console.log("Processing: Updating top ticker...");
+                updateTopTicker(activeFeatures);
+
+                if (newWarnings.length > 0) {
+                    console.log(`Processing: Handling ${newWarnings.length} new alerts...`);
+                    latestNewWarningInfo = newWarnings[0].properties; // Store latest for bottom-left
+                    updateBottomLeftPanel(); // Update bottom-left panel
+                    showNewWarningPopup(newWarnings[0]); // Show popup
+                    playNotificationSound();
+                } else if (activeFeatures.length === 0 && displayedWarningIds.size === 0) {
+                     console.log("Processing: No active alerts found.");
+                     if(sidebarStatus) sidebarStatus.textContent = "No active alerts currently.";
+                     updateCountBar([]); // Clear count bar
+                     updateTopTicker([]); // Clear ticker
+                     latestNewWarningInfo = null; updateBottomLeftPanel(); // Clear bottom-left
+                }
+                 console.log("Processing complete.");
+                 // Hide loading indicator *after* successful processing
+                 if (loadingIndicator && loadingIndicator.style.display !== 'none') {
+                     console.log("Hiding loading indicator after processing.");
+                     hideLoading();
+                 }
+             } catch (error) {
+                 console.error("Error during processWarnings:", error);
+                 if(sidebarStatus) sidebarStatus.textContent = "Error processing alerts.";
+                 hideLoading(); // Hide loading indicator on processing error too
+             }
+        }
+
+         /** Determines alert type from event name */
+        function getAlertType(eventName) { const lowerEvent = eventName?.toLowerCase() || ''; if (lowerEvent.includes('warning')) return 'Warning'; if (lowerEvent.includes('watch')) return 'Watch'; if (lowerEvent.includes('advisory')) return 'Advisory'; return 'Other'; }
+
+        /** Stores warning feature data and creates layer if needed */
+        function addOrUpdateWarningData(feature) { const id = feature.properties.id; try { if (warningLayers[id]) { warningLayers[id].feature = feature; if (warningLayers[id].layer.setStyle) { warningLayers[id].layer.setStyle(getWarningStyle(feature.properties.event)); } } else { const layer = createGeoJsonLayer(feature); if (layer) { warningLayers[id] = { layer: layer, feature: feature }; } } } catch (error) { console.error(`Error adding/updating data for ${id}:`, error); } }
+
+        /** Creates a Leaflet GeoJSON layer for a warning feature */
+        function createGeoJsonLayer(feature) {
+             const props = feature.properties;
+             if (!feature.geometry) { console.warn(`No geometry for ${props.id}`); return null; }
+             try {
+                 const style = getWarningStyle(props.event);
+                 const priority = getCategorySortPriority(props.event);
+                 let targetPane = 'warningPane';
+                 if (priority <= 5) { targetPane = 'highWarningPane'; } // TOR, FFW etc. <= 5
+                 else if (priority <= CRITICAL_WARNING_PRIORITY_THRESHOLD) { targetPane = 'warningPane'; } // Other warnings
+                 else if (props.alertType === 'Watch') { targetPane = 'watchPane'; }
+                 else if (props.alertType === 'Advisory') { targetPane = 'advisoryPane'; }
+
+                 const layer = L.geoJSON(feature, {
+                     style: style,
+                     pane: targetPane,
+                     onEachFeature: (feat, layer) => {
+                         if (layer.getBounds) { try { layer.warningCentroid = layer.getBounds().getCenter(); } catch (e) { console.warn("Could not get bounds/center for layer", props.id); } }
+                         layer.isTornadoWarning = props.event?.toLowerCase().includes('tornado warning');
+
+                         const eventName = props.event || 'Weather Alert'; const alertType = props.alertType || 'N/A'; const severity = props.severity || 'N/A'; const effective = props.effective ? new Date(props.effective).toLocaleString() : 'N/A'; const expires = props.expires ? new Date(props.expires).toLocaleString() : 'N/A'; const areaDesc = props.areaDesc || 'N/A'; const headline = props.headline || 'N/A'; const webLink = props.web || '#';
+                         const popupContent = `<div class="text-sm max-w-xs"><h3 class="font-bold text-base mb-1" style="color: ${style.color};">${eventName} (${alertType})</h3><p><strong>Severity:</strong> ${severity}</p><p><strong>Effective:</strong> ${effective}</p><p><strong>Expires:</strong> ${expires}</p><p><strong>Areas:</strong> ${areaDesc}</p><hr class="my-2"><p><strong>Headline:</strong> ${headline}</p><p class="mt-2"><a href="${webLink}" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:underline">More Info (NWS)</a></p><button class="popup-details-btn" data-warning-id="${props.id}">Full Details</button></div>`;
+                         layer.bindPopup(popupContent, { maxHeight: 300 });
+
+                         layer.on('click', (e) => {
+                             L.DomEvent.stopPropagation(e);
+                             console.log(`Polygon clicked: ${props.id}, Is Tornado: ${layer.isTornadoWarning}`);
+                             if (layer.isTornadoWarning && layer.warningCentroid) { prepareVelocityLayer(layer.warningCentroid); }
+                             else if (layer.isTornadoWarning) { console.warn("Tornado warning clicked, but centroid missing."); }
+                             layer.openPopup(); // Open popup on click
+                         });
+                     }
+                 });
+                 return layer;
+             } catch (error) { console.error(`Error creating GeoJSON layer for ${props.id}:`, error); return null; }
+        }
+
+        /** Updates visibility of map layers based on ALL filters */
+        function updateMapLayerVisibility() { if (!map) return; try { Object.values(warningLayers).forEach(item => { if (isWarningVisible(item.feature)) { if (!map.hasLayer(item.layer)) { item.layer.addTo(map); } } else { if (map.hasLayer(item.layer)) { map.removeLayer(item.layer); } } }); } catch (error) { console.error("Error updating map layer visibility:", error); } }
+
+        /** Checks if a warning feature should be visible */
+        function isWarningVisible(feature) { try { const props = feature.properties; const alertType = props.alertType; const categoryName = props.category; const typeVisible = visibleTypes[alertType] === true; const categoryVisible = categoryVisibilityState[categoryName] === undefined ? true : categoryVisibilityState[categoryName]; const isOtherType = alertType === 'Other'; if (isOtherType) return false; return typeVisible && categoryVisible; } catch (error) { console.error("Error in isWarningVisible:", error, feature); return false; } }
+
+        /** Removes a single warning by ID */
+        function removeWarning(warningId) { try { if (warningLayers[warningId]) { if (map && map.hasLayer(warningLayers[warningId].layer)) { map.removeLayer(warningLayers[warningId].layer); } delete warningLayers[warningId]; } displayedWarningIds.delete(warningId); } catch (error) { console.error(`Error removing warning ${warningId}:`, error); } }
+
+        /** Removes warnings no longer in the active feed */
+        function removeExpiredWarnings(currentWarningIds) { const expiredIds = []; displayedWarningIds.forEach(id => { if (!currentWarningIds.has(id)) { expiredIds.push(id); } }); if (expiredIds.length > 0) { console.log(`Removing ${expiredIds.length} expired/cancelled alert(s):`, expiredIds); expiredIds.forEach(id => { removeWarning(id); }); } }
+
+        /** Groups warnings by category name */
+        function groupWarningsByCategory(features) { const warningsByCategory = {}; features.forEach(feature => { const category = feature.properties.category; if (!warningsByCategory[category]) { warningsByCategory[category] = []; } warningsByCategory[category].push(feature); }); return warningsByCategory; }
+
+        /** Defines sorting priority for categories */
+        function getCategorySortPriority(categoryName) { const lowerCategory = categoryName?.toLowerCase() || ''; if (lowerCategory.includes('tornado warning')) return 1; if (lowerCategory.includes('extreme wind warning')) return 2; if (lowerCategory.includes('hurricane warning')) return 3; if (lowerCategory.includes('typhoon warning')) return 3; if (lowerCategory.includes('severe thunderstorm warning')) return 4; if (lowerCategory.includes('flash flood warning')) return 5; if (lowerCategory.includes('flood warning')) return 6; if (lowerCategory.includes('blizzard warning')) return 7; if (lowerCategory.includes('ice storm warning')) return 8; if (lowerCategory.includes('winter storm warning')) return 9; if (lowerCategory.includes('high wind warning')) return 10; if (lowerCategory.includes('red flag warning')) return 11; if (lowerCategory.includes('tornado watch')) return 20; if (lowerCategory.includes('hurricane watch')) return 21; if (lowerCategory.includes('typhoon watch')) return 21; if (lowerCategory.includes('severe thunderstorm watch')) return 22; if (lowerCategory.includes('flash flood watch')) return 23; if (lowerCategory.includes('flood watch')) return 24; if (lowerCategory.includes('winter storm watch')) return 25; if (lowerCategory.includes('fire weather watch')) return 26; if (lowerCategory.includes('special weather statement')) return 50; if (lowerCategory.includes('advisory')) return 60; return 99; }
+
+        /** Updates the sidebar */
+        function updateSidebar(warningsByCategory) {
+             if (!warningListContainer || !sidebarStatus) { console.error("Sidebar elements not found in updateSidebar"); return; }
+             console.log("updateSidebar: Starting update...");
+             warningListContainer.innerHTML = ''; let visibleItemCountTotal = 0;
+             try {
+                 const sortedCategories = Object.keys(warningsByCategory).sort((a, b) => { const priorityA = getCategorySortPriority(a); const priorityB = getCategorySortPriority(b); return priorityA !== priorityB ? priorityA - priorityB : a.localeCompare(b); });
+                 console.log(`updateSidebar: Processing ${sortedCategories.length} categories.`);
+
+                 if (sortedCategories.length === 0 && Object.keys(warningLayers).length > 0) { sidebarStatus.textContent = "No alerts match current filters."; warningListContainer.innerHTML = `<p class="text-gray-400 p-2">No alerts match current filters.</p>`; return; }
+
+                 sortedCategories.forEach((category, index) => {
+                     const warningsInCategory = warningsByCategory[category];
+                     if (!Array.isArray(warningsInCategory)) { console.warn(`Data for category ${category} is not an array.`); return; }
+                     const visibleWarningsInCategory = warningsInCategory.filter(isWarningVisible);
+                     const isCategoryVisibleState = categoryVisibilityState[category] === undefined ? true : categoryVisibilityState[category];
+                     if (warningsInCategory.length === 0) return;
+                     if (warningsInCategory.length > 0 && warningsInCategory[0].properties.alertType === 'Other') return;
+
+                     const isExpanded = categoryCollapseState[category] === true;
+                     const categoryDiv = document.createElement('div');
+                     categoryDiv.className = 'mb-1 border-b border-gray-700 last:border-b-0';
+                     const categoryTitle = document.createElement('h3');
+                     const styleInfo = getWarningStyle(category);
+                     console.log(`updateSidebar: Applying color ${styleInfo.fillColor} to category ${category}`); // Debug Log
+                     categoryTitle.className = `category-title font-semibold`;
+                     categoryTitle.style.backgroundColor = styleInfo.fillColor;
+                     categoryTitle.style.color = isLightColor(styleInfo.fillColor) ? '#1f2937' : 'white';
+                     if (!isCategoryVisibleState) { categoryTitle.style.filter = 'grayscale(70%) opacity(60%)'; }
+                     categoryTitle.setAttribute('aria-expanded', isExpanded);
+                     const colorKeyHTML = `<span class="color-key" style="background-color: ${styleInfo.fillColor}; border-color: ${isLightColor(styleInfo.fillColor) ? '#9ca3af' : 'transparent'};" title="${styleInfo.fillColor}"></span>`;
+                     const eyeIconHTML = `<span class="category-visibility-toggle" title="Toggle visibility for ${category} on map">${isCategoryVisibleState ? eyeIconVisibleSVG : eyeIconHiddenSVG}</span>`;
+                     const indicatorColor = isLightColor(styleInfo.fillColor) ? '#374151' : 'rgba(255,255,255,0.8)';
+                     categoryTitle.innerHTML = `<span class="flex-grow mr-2 truncate" title="${category}">${colorKeyHTML}${category} (${visibleWarningsInCategory.length}/${warningsInCategory.length})</span>${eyeIconHTML}<span class="category-indicator ${isExpanded ? 'expanded' : 'collapsed'}" style="color: ${indicatorColor};">+</span>`;
+                     categoryDiv.appendChild(categoryTitle);
+                     const listContainer = document.createElement('div');
+                     listContainer.className = `pl-2 border-l-2 border-gray-600 ml-1 ${isExpanded ? '' : 'hidden'}`;
+                     const list = document.createElement('ul');
+                     list.className = 'space-y-1 py-1';
+                     warningsInCategory.sort((a, b) => (a.properties.headline || '').localeCompare(b.properties.headline || '')).forEach(warning => { const isVisible = isWarningVisible(warning); if (isVisible) visibleItemCountTotal++; const listItem = document.createElement('li'); listItem.className = `warning-item text-sm p-1 rounded ${isVisible ? 'text-gray-300 hover:bg-gray-600 hover:text-white' : 'text-gray-500 italic'}`; listItem.textContent = warning.properties.headline || warning.properties.event || 'Unnamed Alert'; listItem.setAttribute('data-warning-id', warning.properties.id); listItem.setAttribute('title', `Type: ${warning.properties.alertType} | Severity: ${warning.properties.severity || 'N/A'}\nEffective: ${new Date(warning.properties.effective).toLocaleString()}${!isVisible ? '\n(Hidden by type/category filter)' : ''}`); listItem.addEventListener('click', (e) => { e.stopPropagation(); if (isVisible) showSelectedWarningDetails(warning.properties); }); list.appendChild(listItem); });
+                     listContainer.appendChild(list);
+                     categoryDiv.appendChild(listContainer);
+                     warningListContainer.appendChild(categoryDiv);
+                     categoryTitle.addEventListener('click', (e) => { if (!e.target.closest('.category-visibility-toggle')) { const currentlyExpanded = categoryCollapseState[category]; categoryCollapseState[category] = !currentlyExpanded; listContainer.classList.toggle('hidden'); categoryTitle.setAttribute('aria-expanded', !currentlyExpanded); categoryTitle.querySelector('.category-indicator').classList.toggle('expanded'); categoryTitle.querySelector('.category-indicator').classList.toggle('collapsed'); } });
+                     categoryTitle.querySelector('.category-visibility-toggle').addEventListener('click', (e) => handleCategoryVisibilityToggle(category, e));
+                 });
+
+                 if (visibleItemCountTotal === 0 && Object.keys(warningLayers).length > 0) { const message = "No alerts match current filters."; sidebarStatus.textContent = message; warningListContainer.innerHTML = `<p class="text-gray-400 p-2">${message}</p>`; }
+                 else if (Object.keys(warningLayers).length === 0) { sidebarStatus.textContent = "No active alerts currently."; warningListContainer.innerHTML = `<p class="text-gray-400 p-2">No active alerts currently.</p>`; }
+                 else { sidebarStatus.textContent = ""; }
+                 console.log("updateSidebar: Update complete.");
+             } catch (error) { console.error("Error updating sidebar:", error); sidebarStatus.textContent = "Error updating sidebar."; }
+        }
+
+        /** Helper function to determine if a hex color is light or dark */
+        function isLightColor(hexColor) { if (!hexColor || typeof hexColor !== 'string' || hexColor.length < 4) return false; hexColor = hexColor.replace('#', ''); if (hexColor.length === 3) { hexColor = hexColor[0] + hexColor[0] + hexColor[1] + hexColor[1] + hexColor[2] + hexColor[2]; } if (hexColor.length !== 6) return false; const r = parseInt(hexColor.substr(0, 2), 16); const g = parseInt(hexColor.substr(2, 2), 16); const b = parseInt(hexColor.substr(4, 2), 16); const yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000; return yiq >= 150; }
+
+        /** Zooms the map to a specific warning */
+        function zoomToWarning(warningId) { console.log(`Zooming to warning: ${warningId}`); try { const item = warningLayers[warningId]; if (!item) { console.warn(`Layer data not found: ${warningId}`); return; } const layer = item.layer; const feature = item.feature; if (!layer || !map) { console.warn(`Layer/map not ready: ${warningId}`); return; } if (!isWarningVisible(feature)) { console.log(`Warning ${warningId} hidden by filters.`); return; } if (!map.hasLayer(layer)) { console.log(`Warning ${warningId} layer not on map. Adding.`); layer.addTo(map); } const bounds = layer.getBounds(); if (bounds && bounds.isValid()) { map.fitBounds(bounds, { padding: [50, 50], maxZoom: 10 }); setTimeout(() => { try { if (typeof layer.openPopup === 'function') layer.openPopup(); else if (typeof layer.eachLayer === 'function') { layer.eachLayer(subLayer => { if (typeof subLayer.openPopup === 'function') { subLayer.openPopup(); return; } }); } } catch (e) { console.error("Popup error:", e); } }, 350); } else { console.warn(`Invalid bounds: ${warningId}. Cannot zoom.`); if (feature.geometry?.type === 'Point') { map.setView(L.latLng(feature.geometry.coordinates[1], feature.geometry.coordinates[0]), 10); } } } catch (error) { console.error(`Error zooming to warning ${warningId}:`, error); } }
+
+        /** Determines style based on NWS color standard */
+        function getWarningStyle(eventType) { try { const lowerEvent = eventType?.toLowerCase() || 'default'; let color = nwsEventColors['default']; let foundColor = false; for (const key in nwsEventColors) { if (lowerEvent === key || lowerEvent.startsWith(key + ' ') || lowerEvent.endsWith(' ' + key)) { color = nwsEventColors[key]; foundColor = true; break; } } if (!foundColor) { for (const key in nwsEventColors) { if (key !== 'default' && lowerEvent.includes(key)) { color = nwsEventColors[key]; break; } } } let weight = 2; let fillOpacity = 0.5; if (lowerEvent.includes('tornado warning') || lowerEvent.includes('hurricane warning') || lowerEvent.includes('typhoon warning') || lowerEvent.includes('extreme wind')) { weight = 3; fillOpacity = 0.6; } const alertType = getAlertType(eventType); if (alertType === 'Watch') { fillOpacity = Math.max(0.15, fillOpacity - 0.25); } else if (alertType === 'Advisory') { fillOpacity = Math.max(0.2, fillOpacity - 0.15); } else if (alertType === 'Other') { fillOpacity = Math.max(0.1, fillOpacity - 0.3); } return { color: color, weight: weight, opacity: 0.8, fillColor: color, fillOpacity: fillOpacity, fill: fillOpacity > 0.01 }; } catch (error) { console.error(`Error getting style for event ${eventType}:`, error); return { color: '#CCCCCC', weight: 1, opacity: 0.5, fillColor: '#CCCCCC', fillOpacity: 0.2 }; } }
+
+        /** Shows the bottom-right new warning popup */
+        function showNewWarningPopup(newWarningFeature) { if (!newWarningFeature || !newWarningPopup || !newWarningPopupViewBtn) return; try { const props = newWarningFeature.properties; const warningId = props.id; if (newWarningPopupTimeout) clearTimeout(newWarningPopupTimeout); newWarningPopupText.textContent = `New: ${props.event || 'Alert'}`; const oldBtn = newWarningPopupViewBtn; const newBtn = oldBtn.cloneNode(true); oldBtn.parentNode.replaceChild(newBtn, oldBtn); newWarningPopupViewBtn = newBtn; newWarningPopupViewBtn.onclick = () => { console.log("View button clicked for:", warningId); zoomToWarning(warningId); dismissNewWarningPopup(); }; newWarningPopup.classList.add('visible'); newWarningPopupTimeout = setTimeout(dismissNewWarningPopup, NEW_POPUP_TIMEOUT_MS); } catch(e){ console.error("Error showing new warning popup:", e); } }
+        /** Dismisses the bottom-right new warning popup */
+        function dismissNewWarningPopup() { if (newWarningPopupTimeout) clearTimeout(newWarningPopupTimeout); newWarningPopupTimeout = null; if(newWarningPopup) newWarningPopup.classList.remove('visible'); }
+
+        /** Updates the time display in the bottom left */
+        function updateTime() { if (!currentTimeDisplayBl) return; const now = new Date(); currentTimeDisplayBl.textContent = now.toLocaleString('en-US'); }
+
+        /** Updates the recent warning display in the bottom left */
+        function updateBottomLeftPanel() {
+             console.log("updateBottomLeftPanel: Updating... Latest info ID:", latestNewWarningInfo?.id);
+             if (!recentWarningDisplayBl) { console.error("recentWarningDisplayBl not found"); return; }
+             try {
+                 if (latestNewWarningInfo && latestNewWarningInfo.id) {
+                     const props = latestNewWarningInfo;
+                     const eventName = props.event || 'Alert';
+                     const headline = props.headline || 'Details unavailable';
+                     recentWarningDisplayBl.innerHTML = `Latest: <span class="font-semibold">${eventName}</span> - ${headline.substring(0,50)}...`;
+                     recentWarningDisplayBl.setAttribute('data-warning-id', props.id);
+                     console.log("Bottom left panel updated with warning:", props.id);
+                 } else {
+                     recentWarningDisplayBl.innerHTML = 'No new alerts recently.';
+                     recentWarningDisplayBl.removeAttribute('data-warning-id');
+                     console.log("Bottom left panel cleared (no new alerts).");
+                 }
+             } catch(error) {
+                  console.error("Error updating bottom left panel:", error);
+             }
+        }
+
+        /** Handles click on the recent warning text */
+        function handleRecentWarningClick() { const warningId = recentWarningDisplayBl.getAttribute('data-warning-id'); console.log("Recent warning clicked. ID:", warningId); if (warningId) { zoomToWarning(warningId); const item = warningLayers[warningId]; if (item && item.layer && map.hasLayer(item.layer)) { setTimeout(() => { try { item.layer.openPopup(); } catch(e) { console.error("Error opening popup from recent:", e); } }, 400); } } else { console.log("Recent warning clicked, but no ID found."); } }
+
+        /** Updates the Right Vertical Count Bar */
+        function updateCountBar(activeFeatures) { if (!countBar) { console.error("Count bar element not found in updateCountBar"); return; } console.log("updateCountBar: Starting update..."); try { const counts = { tor: 0, svr: 0, ffw: 0, fld: 0, sws: 0 }; const elements = { tor: countTor, svr: countSvr, ffw: countFfw, fld: countFld, sws: countSws }; const colors = { tor: getWarningStyle('Tornado Warning').fillColor, svr: getWarningStyle('Severe Thunderstorm Warning').fillColor, ffw: getWarningStyle('Flash Flood Warning').fillColor, fld: getWarningStyle('Flood Warning').fillColor, sws: getWarningStyle('Special Weather Statement').fillColor }; activeFeatures.forEach(feature => { const eventLower = feature.properties.event?.toLowerCase() || ''; if (eventLower.includes('tornado warning')) counts.tor++; else if (eventLower.includes('severe thunderstorm warning')) counts.svr++; else if (eventLower.includes('flash flood warning')) counts.ffw++; else if (eventLower.includes('flood warning')) counts.fld++; else if (eventLower.includes('special weather statement')) counts.sws++; }); for (const key in counts) { if (elements[key]) { elements[key].querySelector('strong').textContent = counts[key]; if (counts[key] > 0) { elements[key].style.backgroundColor = `${colors[key]}40`; elements[key].style.borderColor = colors[key]; elements[key].style.color = isLightColor(colors[key]) ? '#1f2937' : 'white'; } else { elements[key].style.backgroundColor = 'transparent'; elements[key].style.borderColor = 'transparent'; elements[key].style.color = '#e5e7eb'; } } else { console.warn(`Count element for key '${key}' not found.`); } } console.log("updateCountBar: Update complete.", counts); } catch (error) { console.error("Error updating count bar:", error); } }
+
+        /** Shows details of the selected warning */
+        function showSelectedWarningDetails(props) { console.log("Warning selected:", props?.id); if (props?.id) { zoomToWarning(props.id); const item = warningLayers[props.id]; if (item && item.layer && map.hasLayer(item.layer)) { setTimeout(() => { try { if (typeof item.layer.openPopup === 'function') item.layer.openPopup(); else if (typeof item.layer.eachLayer === 'function') { item.layer.eachLayer(subLayer => { if (typeof subLayer.openPopup === 'function') { subLayer.openPopup(); return; } }); } } catch (e) { console.error("Popup error on select:", e); } }, 350); } } }
+
+        /** Shows the modal dialog with provided content */
+        function showModal(title, content) { if (!modalOverlay || !modalDialog || !modalTitle || !modalContent) return; console.log("Showing modal with title:", title); modalTitle.textContent = title; modalContent.textContent = content; modalOverlay.style.display = 'block'; modalDialog.style.display = 'block'; }
+
+        /** Hides the modal dialog */
+        function hideModal() { if (!modalOverlay || !modalDialog) return; console.log("Hiding modal."); modalOverlay.style.display = 'none'; modalDialog.style.display = 'none'; modalTitle.textContent = ''; modalContent.textContent = ''; }
+
+        /** Updates the Top Scrolling Ticker */
+        function updateTopTicker(activeFeatures) {
+            if (!topTickerBar || !topTickerContent) return;
+            console.log("Updating top ticker...");
+            try {
+                const criticalWarnings = activeFeatures
+                    .filter(f => getCategorySortPriority(f.properties.category) <= CRITICAL_WARNING_PRIORITY_THRESHOLD && isWarningVisible(f))
+                    .sort((a, b) => getCategorySortPriority(a.properties.category) - getCategorySortPriority(b.properties.category));
+
+                if (criticalWarnings.length > 0) {
+                    let tickerText = "";
+                    criticalWarnings.forEach(f => { const props = f.properties; const eventName = props.event || 'ALERT'; const headline = props.headline || props.areaDesc || ''; tickerText += ` *** ${eventName.toUpperCase()} *** ${headline} `; });
+                    const firstItemText = ` *** ${criticalWarnings[0].properties.event.toUpperCase()} *** ${criticalWarnings[0].properties.headline || criticalWarnings[0].properties.areaDesc || ''} `;
+                    tickerText += " \u00A0\u00A0 | \u00A0\u00A0 " + firstItemText;
+
+                    // --- Ticker Animation Fix ---
+                    // Check if text content needs updating
+                    if (topTickerContent.textContent !== tickerText) {
+                        console.log("Updating ticker text content.");
+                        topTickerContent.textContent = tickerText;
+
+                        // Remove previous animation to reset properly
+                        topTickerContent.style.animation = 'none';
+
+                        // Calculate duration based on new text length
+                        // We need the rendered width for accurate speed, but text length is an approximation
+                        const approxChars = tickerText.length;
+                        const duration = Math.max(20, approxChars / TICKER_CHARS_PER_SECOND); // Ensure minimum duration
+                        console.log(`Setting ticker animation duration to approx ${duration}s`);
+
+                        // Re-apply animation via style property
+                        // Need a slight delay for the browser to register the animation removal
+                        requestAnimationFrame(() => {
+                             requestAnimationFrame(() => { // Double requestAnimationFrame ensures reflow
+                                topTickerContent.style.animation = `scroll-left ${duration}s linear infinite`;
+                             });
+                        });
+                    }
+
+                    if (!topTickerBar.classList.contains('visible')) {
+                        topTickerBar.classList.add('visible');
+                        console.log("Top ticker made visible.");
+                    }
+                } else {
+                    if (topTickerBar.classList.contains('visible')) {
+                         topTickerBar.classList.remove('visible');
+                         topTickerContent.textContent = "";
+                         topTickerContent.style.animation = 'none'; // Stop animation
+                         console.log("Top ticker hidden.");
+                    }
+                }
+            } catch (error) {
+                 console.error("Error updating top ticker:", error);
+            }
+        }
+
+
+        /** Event Delegation for Popup Buttons */
+        document.addEventListener('click', function(event) { if (event.target && event.target.classList.contains('popup-details-btn')) { const warningId = event.target.getAttribute('data-warning-id'); console.log("Full Details button clicked for:", warningId); if (warningId && warningLayers[warningId]) { const props = warningLayers[warningId].feature.properties; const fullText = `Description:\n${props.description || '(No description available)'}\n\nInstructions:\n${props.instruction || '(No instructions available)'}`; showModal(props.event || 'Alert Details', fullText); } else { console.error("Could not find warning data for ID:", warningId); showModal('Error', 'Could not retrieve full warning details.'); } } });
+
+        /** Finds the closest radar site from the predefined list */
+        function findClosestRadarSite(latlng) { let closestSiteId = null; let minDistance = Infinity; if (!latlng || typeof latlng.distanceTo !== 'function') { console.error("Invalid LatLng provided to findClosestRadarSite"); return null; } for (const siteId in radarSites) { const site = radarSites[siteId]; const siteLatLng = L.latLng(site.lat, site.lon); const distance = latlng.distanceTo(siteLatLng); if (distance < minDistance) { minDistance = distance; closestSiteId = siteId; } } console.log(`Closest radar site to ${latlng}: ${closestSiteId} (Distance: ${minDistance}m)`); return closestSiteId; }
+
+        /** Prepares the static velocity image overlay for the nearest site */
+        function prepareVelocityLayer(centroid) {
+            console.log("Preparing velocity layer for centroid:", centroid);
+            if (!velocityLayerGroup) {
+                console.log("Creating velocity layer group and adding to control.");
+                velocityLayerGroup = L.layerGroup();
+                if (layerControl) { layerControl.addOverlay(velocityLayerGroup, "Site Velocity (Tornado)"); console.log("Added 'Site Velocity (Tornado)' toggle to layer control."); }
+                else { console.error("Layer control not available to add velocity toggle."); }
+            }
+
+            const siteId4Letter = findClosestRadarSite(centroid);
+            if (!siteId4Letter) { console.warn("Could not find closest radar site."); return; }
+            const siteId3Letter = siteId4Letter.length === 4 ? siteId4Letter.substring(1) : siteId4Letter;
+             if (siteId3Letter.length !== 3) { console.warn(`Could not derive 3-letter site ID from ${siteId4Letter}`); return; }
+
+            const imageUrl = VELOCITY_IMG_URL_TEMPLATE.replace('{siteid}', siteId3Letter.toUpperCase());
+            console.log("Constructed velocity image URL:", imageUrl);
+
+            const siteInfo = radarSites[siteId4Letter];
+            if (!siteInfo) { console.warn(`Coordinates not found for site ${siteId4Letter}`); return; }
+            const siteLat = siteInfo.lat; const siteLon = siteInfo.lon;
+            // *** Use configured offset for velocity bounds ***
+            const latOffset = VELOCITY_BOUND_OFFSET_DEG; const lonOffset = VELOCITY_BOUND_OFFSET_DEG;
+            const bounds = L.latLngBounds( [siteLat - latOffset, siteLon - lonOffset], [siteLat + latOffset, siteLon + lonOffset] );
+            console.log(`Approximate bounds for ${siteId4Letter} (Offset: ${VELOCITY_BOUND_OFFSET_DEG}):`, bounds);
+
+            velocityLayerGroup.clearLayers();
+
+            currentVelocityOverlay = L.imageOverlay(imageUrl, bounds, { opacity: 0.7, errorOverlayUrl: '', interactive: false, pane: 'velocityPane' });
+            currentVelocityOverlay.on('error', function() { console.error(`Failed to load velocity image: ${imageUrl}`); if (map.hasLayer(currentVelocityOverlay)) { velocityLayerGroup.removeLayer(currentVelocityOverlay); } alert(`Could not load velocity data for site ${siteId4Letter}. Image might not be available.`); });
+            currentVelocityOverlay.on('load', function() { console.log(`Successfully loaded velocity image: ${imageUrl}`); });
+            velocityLayerGroup.addLayer(currentVelocityOverlay);
+            console.log(`Velocity layer prepared for site ${siteId4Letter}. Toggle 'Site Velocity (Tornado)' in layer control to view.`);
+             alert(`Velocity data for nearest site (${siteId4Letter}) is ready. Enable "Site Velocity (Tornado)" in the layer control (top-right) to view.`);
+        }
+
+        // --- Function Definitions END ---
+
+    </script>
+</body>
+</html>
